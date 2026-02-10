@@ -41,9 +41,11 @@ export default function RootLayout({
                 <Link href="/upload" className="nav-link">
                   Upload
                 </Link>
-                <Link href="/admin" className="btn-primary">
-                  Admin
-                </Link>
+                {process.env.NEXT_PUBLIC_SHOW_ADMIN === 'true' && (
+                  <Link href="/admin" className="btn-primary">
+                    Admin
+                  </Link>
+                )}
               </nav>
             </div>
           </div>
