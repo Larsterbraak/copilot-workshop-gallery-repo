@@ -1,8 +1,8 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { Upload, X, Image as ImageIcon, CheckCircle } from 'lucide-react';
+import { Upload, X, CheckCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface UploadedFile {
@@ -11,6 +11,9 @@ interface UploadedFile {
   preview: string;
   status: 'uploading' | 'success' | 'error';
   progress: number;
+  errorMessage?: string;
+  uploadedId?: string;
+  uploadedUrl?: string;
 }
 
 interface UploadZoneProps {
@@ -19,12 +22,97 @@ interface UploadZoneProps {
   className?: string;
 }
 
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+
 export function UploadZone({ onUpload, maxFiles = 10, className = "" }: UploadZoneProps) {
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
 
-  const onDrop = useCallback((acceptedFiles: File[]) => {
-    const newFiles = acceptedFiles.map(file => ({
-      id: Math.random().toString(36).substring(2),
+  // Cleanup object URLs on unmount
+  useEffect(() => {
+    return () => {
+      uploadedFiles.forEach(fileObj => {
+        if (fileObj.preview) {
+          URL.revokeObjectURL(fileObj.preview);
+        }
+      });
+    };
+  }, [uploadedFiles]);
+
+  /**
+   * Upload a single file to the API
+   */
+  const uploadFile = async (fileObj: UploadedFile) => {
+    const formData = new FormData();
+    formData.append('file', fileObj.file);
+    formData.append('title', fileObj.file.name.replace(/\.[^/.]+$/, '')); // filename without extension
+    formData.append('tags', JSON.stringify(['uploaded']));
+
+    try {
+      // Get demo auth token from environment or use default
+      const authToken = process.env.NEXT_PUBLIC_DEMO_AUTH_TOKEN || 'demo-token-123';
+
+      const response = await fetch('/api/uploads', {
+        method: 'POST',
+        headers: {
+          'x-demo-auth': authToken,
+        },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Upload failed');
+      }
+
+      const result = await response.json();
+
+      setUploadedFiles(prev =>
+        prev.map(f =>
+          f.id === fileObj.id
+            ? { 
+                ...f, 
+                status: 'success', 
+                progress: 100,
+                uploadedId: result.id,
+                uploadedUrl: result.url,
+              }
+            : f
+        )
+      );
+    } catch (error) {
+      console.error('Upload error:', error);
+      setUploadedFiles(prev =>
+        prev.map(f =>
+          f.id === fileObj.id
+            ? { 
+                ...f, 
+                status: 'error', 
+                progress: 0,
+                errorMessage: error instanceof Error ? error.message : 'Upload failed',
+              }
+            : f
+        )
+      );
+    }
+  };
+
+  const onDrop = useCallback((acceptedFiles: File[], rejectedFiles: unknown[]) => {
+    // Handle rejected files
+    if (rejectedFiles.length > 0) {
+      console.warn('Some files were rejected:', rejectedFiles);
+    }
+
+    // Validate file size on client side for better UX
+    const validFiles = acceptedFiles.filter(file => {
+      if (file.size > MAX_FILE_SIZE) {
+        console.warn(`File ${file.name} exceeds size limit`);
+        return false;
+      }
+      return true;
+    });
+
+    const newFiles = validFiles.map(file => ({
+      id: crypto.randomUUID(),
       file,
       preview: URL.createObjectURL(file),
       status: 'uploading' as const,
@@ -33,31 +121,12 @@ export function UploadZone({ onUpload, maxFiles = 10, className = "" }: UploadZo
 
     setUploadedFiles(prev => [...prev, ...newFiles]);
 
-    // Simulate upload progress
+    // Upload each file to the real API
     newFiles.forEach(fileObj => {
-      const interval = setInterval(() => {
-        setUploadedFiles(prev => 
-          prev.map(f => 
-            f.id === fileObj.id 
-              ? { ...f, progress: Math.min(f.progress + 10, 100) }
-              : f
-          )
-        );
-      }, 200);
-
-      setTimeout(() => {
-        clearInterval(interval);
-        setUploadedFiles(prev => 
-          prev.map(f => 
-            f.id === fileObj.id 
-              ? { ...f, status: 'success', progress: 100 }
-              : f
-          )
-        );
-      }, 2000);
+      uploadFile(fileObj);
     });
 
-    onUpload?.(acceptedFiles);
+    onUpload?.(validFiles);
   }, [onUpload]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -72,7 +141,7 @@ export function UploadZone({ onUpload, maxFiles = 10, className = "" }: UploadZo
   const removeFile = (id: string) => {
     setUploadedFiles(prev => {
       const file = prev.find(f => f.id === id);
-      if (file) {
+      if (file && file.preview) {
         URL.revokeObjectURL(file.preview);
       }
       return prev.filter(f => f.id !== id);
@@ -174,6 +243,12 @@ export function UploadZone({ onUpload, maxFiles = 10, className = "" }: UploadZo
                       <div className="flex items-center gap-2 text-green-600 text-sm">
                         <CheckCircle className="h-4 w-4" />
                         <span>Upload complete</span>
+                      </div>
+                    )}
+                    
+                    {fileObj.status === 'error' && (
+                      <div className="text-red-600 text-sm">
+                        <span>Error: {fileObj.errorMessage || 'Upload failed'}</span>
                       </div>
                     )}
                   </div>
