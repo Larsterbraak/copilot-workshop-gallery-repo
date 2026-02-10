@@ -142,7 +142,10 @@ Multiple layers protect against Cross-Site Scripting:
 ### Current Limitations
 
 1. **In-Memory Rate Limiting**: Not suitable for production (see section 3)
-2. **Demo Authentication**: Placeholder implementation (see section 6)
+2. **Demo Authentication**: Placeholder implementation with client-side token exposure (see section 6)
+   - ⚠️ **CRITICAL**: Current demo auth token is exposed in client-side JavaScript bundle
+   - Anyone can view the token in browser dev tools or by inspecting the bundle
+   - This is ONLY acceptable for demo/workshop purposes
 3. **Local File Storage**: Files stored on disk, not cloud storage
 4. **No Database**: Metadata not persisted beyond upload response
 5. **Single Server**: No distributed coordination or clustering support

@@ -145,7 +145,7 @@ export function checkRateLimit(
   identifier: string,
   limiter: RateLimiter = uploadRateLimiter
 ): Response | null {
-  const { allowed, retryAfter } = limiter.check(identifier);
+  const { allowed, retryAfter, resetAt } = limiter.check(identifier);
 
   if (!allowed) {
     return new Response(
@@ -160,7 +160,7 @@ export function checkRateLimit(
           'Content-Type': 'application/json',
           'Retry-After': retryAfter?.toString() || '60',
           'X-RateLimit-Remaining': '0',
-          'X-RateLimit-Reset': limiter.check(identifier).resetAt.toString(),
+          'X-RateLimit-Reset': resetAt.toString(),
         },
       }
     );

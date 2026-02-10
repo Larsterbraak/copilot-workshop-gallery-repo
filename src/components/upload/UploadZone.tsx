@@ -48,8 +48,17 @@ export function UploadZone({ onUpload, maxFiles = 10, className = "" }: UploadZo
     formData.append('tags', JSON.stringify(['uploaded']));
 
     try {
-      // Get demo auth token from environment or use default
-      const authToken = process.env.NEXT_PUBLIC_DEMO_AUTH_TOKEN || 'demo-token-123';
+      // SECURITY NOTE: In production, use proper server-side authentication
+      // The current approach exposes the token in client-side code, which is
+      // acceptable ONLY for demo/workshop purposes. Production should use:
+      // - NextAuth.js session-based auth
+      // - HTTP-only cookies
+      // - Server-side API routes for sensitive operations
+      const authToken = process.env.NEXT_PUBLIC_DEMO_AUTH_TOKEN;
+      
+      if (!authToken) {
+        throw new Error('Authentication token not configured. Please set NEXT_PUBLIC_DEMO_AUTH_TOKEN environment variable.');
+      }
 
       const response = await fetch('/api/uploads', {
         method: 'POST',
@@ -112,7 +121,9 @@ export function UploadZone({ onUpload, maxFiles = 10, className = "" }: UploadZo
     });
 
     const newFiles = validFiles.map(file => ({
-      id: crypto.randomUUID(),
+      id: typeof crypto !== 'undefined' && crypto.randomUUID 
+        ? crypto.randomUUID() 
+        : Math.random().toString(36).substring(2) + Date.now().toString(36),
       file,
       preview: URL.createObjectURL(file),
       status: 'uploading' as const,
